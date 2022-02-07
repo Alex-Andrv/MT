@@ -2,7 +2,7 @@ package generated;
 
 public class MyToken {
 
-    final Enum token;
+    public final Enum token;
 
     final String text;
 
@@ -27,5 +27,9 @@ public class MyToken {
 
     boolean isSkip() {
         return skip;
+    }
+
+    public String toString() {
+        return text;
     }
 }

@@ -10,7 +10,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collector;
 
-public abstract class AbstractLexer {
+public abstract class AbstractLexer implements Lexer {
+
+    public final static String EPS = "";
 
     private final InputStream input;
     Queue<Character> buffer;
@@ -41,13 +43,13 @@ public abstract class AbstractLexer {
                 StringBuilder::toString));
     }
 
-    public void nextNonSkipToken() throws ParseException {
+    public void nextToken() throws ParseException {
         while (curToken.isSkip()) {
-            curToken = nextToken();
+            curToken = next();
         }
     }
 
-    private MyToken nextToken() throws ParseException {
+    private MyToken next() throws ParseException {
         List<LexerRule> candidates = new ArrayList<>(lexerRules);
         MyToken token = null;
         int newPos = curPos;
@@ -114,5 +116,7 @@ public abstract class AbstractLexer {
     public int curPos() {
         return curPos;
     }
+
+
 }
 
