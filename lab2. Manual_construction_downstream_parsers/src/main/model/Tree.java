@@ -19,6 +19,11 @@ public class Tree {
         this.children = Collections.emptyList();
     }
 
+    public boolean addChildren(Tree children) {
+        return this.children.add(children);
+    }
+
+
     public int toGraph(StringBuilder dot, int num) {
         dot.append(String.format("n%d [label=\"%s\"] ; \n", num, node));
         int next_number = num + 1;

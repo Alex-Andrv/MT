@@ -14,7 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-public class Main {
+public class Generator {
 
     private static final Path DEFAULT_OUT_DIR = Path.of("gen");
 

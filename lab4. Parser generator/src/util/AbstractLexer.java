@@ -1,4 +1,4 @@
-package generated;
+package util;
 
 import grammar.model.LexerRule;
 
@@ -12,13 +12,11 @@ import java.util.stream.Collector;
 
 public abstract class AbstractLexer implements Lexer {
 
-    public final static String EPS = "";
-
     private final InputStream input;
     Queue<Character> buffer;
     int realPos;
     int curPos;
-    int realChar;
+    int lastRead;
     MyToken curToken;
 
     public List<LexerRule> lexerRules;
@@ -29,10 +27,9 @@ public abstract class AbstractLexer implements Lexer {
         this.buffer = new ArrayDeque<>();
         realPos = 0;
         curPos = 0;
-        nextToken();
     }
 
-    protected abstract Enum valueOf(String value);
+    public abstract Enum valueOf(String value);
 
 
     private String getBufferString() {
@@ -44,65 +41,66 @@ public abstract class AbstractLexer implements Lexer {
     }
 
     public void nextToken() throws ParseException {
-        while (curToken.isSkip()) {
-            curToken = next();
-        }
-    }
 
-    private MyToken next() throws ParseException {
-        List<LexerRule> candidates = new ArrayList<>(lexerRules);
-        MyToken token = null;
-        int newPos = curPos;
-        while (realChar != -1 && candidates.size() > 0) {
-            String curString = getBufferString();
-            List<LexerRule> newCandidates = new ArrayList<>();
-            for (LexerRule candidate : candidates) {
-                Matcher matcher = Pattern.compile(candidate.regExp).matcher(curString);
-                if (matcher.hitEnd()) {
-                    newCandidates.add(candidate);
-                }
-                if (matcher.lookingAt()) {
-                    String matchedString = curString.substring(0, matcher.end());
-                    Enum type = valueOf(candidate.ruleName);
-                    if (Objects.isNull(token)) {
-                        token = new MyToken(type, matchedString, curPos, candidate.isSkip());
-                        newPos = curPos + matcher.end();
-                    } else if (token.getTokenLen() < matcher.end()){
-                        token = new MyToken(type, matchedString, curPos, candidate.isSkip());
-                        newPos = curPos + matcher.end();
+        MyToken token;
+
+        do {
+            Set<LexerRule> candidates = new HashSet<>(lexerRules);
+            token = null;
+            int newPos = curPos;
+            while (!isEnd() && candidates.size() > 0) {
+                Set<LexerRule> newCandidates = new HashSet<>();
+                for (LexerRule candidate : candidates) {
+                    String curString = getBufferString();
+                    Matcher matcher = Pattern.compile(candidate.regExp).matcher(curString);
+                    matcher.matches();
+                    if (matcher.hitEnd() && lastRead != -1) {
+                        newCandidates.add(candidate);
+                    }
+                    if (matcher.lookingAt()) {
+                        String matchedString = curString.substring(0, matcher.end());
+                        Enum type = valueOf(candidate.ruleName);
+                        if (Objects.isNull(token)) {
+                            token = new MyToken(type, matchedString, curPos, candidate.isSkip());
+                            newPos = curPos + matcher.end();
+                        } else if (token.getTokenLen() < matcher.end()) {
+                            token = new MyToken(type, matchedString, curPos, candidate.isSkip());
+                            newPos = curPos + matcher.end();
+                        }
                     }
                 }
                 candidates = newCandidates;
+                nextChar();
             }
-            nextChar();
-        }
 
-        if (curPos == realPos && realChar == -1) {
-            token = new MyToken(valueOf("EOF"), "", curPos, false);
-        }
+            if (isEnd()) {
+                token = new MyToken(valueOf("EOF"), "", curPos, false);
+            }
 
-        if (Objects.isNull(token)) {
-            throw new ParseException("Token recognition error at: '?'" + getBufferString(), curPos);
-        }
+            if (Objects.isNull(token)) {
+                throw new ParseException("Token recognition error at: " + getBufferString(), curPos);
+            }
 
-        removeProcessedChars(newPos);
+            removeProcessedChars(newPos);
+        } while (token.isSkip());
 
-        return token;
+        curToken = token;
     }
 
 
     private void removeProcessedChars(int newPost) {
-        while (curPos++ != newPost) {
+        while (curPos != newPost) {
             buffer.remove();
+            curPos++;
         }
     }
 
     private void nextChar() throws ParseException {
-        realPos++;
         try {
-            realChar = input.read();
-            if (realChar != -1) {
-                buffer.add((char) realChar);
+            lastRead = input.read();
+            if (lastRead != -1) {
+                realPos++;
+                buffer.add((char) lastRead);
             }
         } catch (IOException e) {
             throw new ParseException(e.getMessage(), realPos);
@@ -117,6 +115,8 @@ public abstract class AbstractLexer implements Lexer {
         return curPos;
     }
 
-
+    private boolean isEnd() {
+        return curPos == realPos && lastRead == -1;
+    }
 }
 

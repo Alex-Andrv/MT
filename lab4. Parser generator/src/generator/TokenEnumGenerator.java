@@ -18,7 +18,7 @@ public class TokenEnumGenerator extends Generator {
     @Override
     public void genFile(Path outDir) throws IOException {
         String grammarName = grammar.grammarName;
-        String enumName = grammarName + "Enum";
+        String enumName = getEnumName(grammarName);
         Path file = outDir.resolve(enumName + ".java");
         createFile(file, enumName);
         try (BufferedWriter bf = Files.newBufferedWriter(file)) {
@@ -33,14 +33,17 @@ public class TokenEnumGenerator extends Generator {
     private void writeTokens(BufferedWriter bf) throws IOException {
 
         bf.write(grammar.
-                lexerRules.values().
+                lexerRules.
                 stream().
                 map(LexerRule::getRuleName).
                 collect(Collectors.joining(", ")));
 
+        bf.write(", ");
         bf.write(String.join(", ", Grammar.RESERVED_TOKENS));
         bf.newLine();
     }
 
-
+    public static String getEnumName(String ruleName) {
+        return ruleName + "Enum";
+    }
 }

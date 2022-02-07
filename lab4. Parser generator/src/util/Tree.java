@@ -1,5 +1,6 @@
-package generated;
+package util;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 
 import java.util.Collections;
@@ -16,7 +17,11 @@ public class Tree {
 
     public Tree(String node) {
         this.node = node;
-        this.children = Collections.emptyList();
+        this.children = new ArrayList<>();
+    }
+
+    public boolean add (Tree child) {
+        return this.children.add(child);
     }
 
     public int toGraph(StringBuilder dot, int num) {

@@ -1,6 +1,5 @@
 package generator;
 
-import util.AbstractLexer;
 import grammar.model.*;
 
 import java.io.BufferedWriter;
@@ -12,70 +11,42 @@ import java.util.stream.Collectors;
 
 public class ParserGenerator extends Generator {
 
-    public final Map<Symbol, Set<String>> FIRST = new HashMap<>();
-    public final Map<Symbol, Set<String>> FOLLOW = new HashMap<>();
-
     public static final List<String> IMPORTS = List.of(
-            "java.io.ByteArrayInputStream;",
             "java.io.InputStream;",
             "java.text.ParseException;",
-            "generated.Lexer",
-            "generated.Tree");
+            "util.Lexer",
+            "util.Tree",
+            "java.util.Set",
+            "util.MyToken");
 
     public ParserGenerator(Grammar grammar) {
         super(grammar);
-        genFirstAndFollow();
     }
 
-    private void genFirstAndFollow() {
-        genFirst();
- //       genFollow();
+    public String getContextVar() {
+        return "_localctx";
     }
 
-    private void genFirst() {
-//        for (String ruleName : grammar.parserRules.keySet()) {
-//            FIRST.put(ruleName, new HashSet<>());
-//        }
-//
-//        boolean repeat = true;
-//        while (repeat) {
-//            repeat = false;
-//            for (Map.Entry<String, Set<String>> entry : FIRST.entrySet()) {
-//                String ruleName = entry.getKey();
-//                ParserRule rule = grammar.parserRules.get(ruleName);
-//                if (rule == null) {
-//                    throw new IllegalStateException(ruleName + "don't exist");
-//                }
-//                Set<String> set = entry.getValue();
-//                for (List<Symbol> symbols : rule.getRules()) {
-//                    for (Symbol symbol : symbols) {
-//                        if (symbol instanceof TerminalSymbol) {
-//                            set.add(((TerminalSymbol) symbol).getTerminalName());
-//                            break;
-//                        } else if (symbol instanceof NonTerminalSymbol) {
-//                            Set<String> symbolName = FIRST.get(((NonTerminalSymbol) symbol).getNonTerminalName());
-//                            if (symbolName.contains())
-//                        }
-//                    }
-//                }
-//            }
-//        }
+    public String getLexerVar() {
+        return "lex";
     }
 
 
     @Override
     public void genFile(Path outDir) throws IOException {
         String grammarName = grammar.grammarName;
-        String className = grammarName + "Parser";
+        String className = getParserName(grammarName);
         Path file = outDir.resolve(className + ".java");
         createFile(file, className);
         try (BufferedWriter bf = Files.newBufferedWriter(file)) {
             writeHeaders(bf);
-            writeImports(bf);
+            writeImports(bf, IMPORTS);
             writeln(bf, "public class " + className + " { ");
+            cntTab++;
             writeFields(bf);
             writeConstructors(bf, grammarName);
             writeRules(bf);
+            cntTab--;
             bf.write("}");
         }
     }
@@ -92,73 +63,106 @@ public class ParserGenerator extends Generator {
     private void writeParserRule(BufferedWriter bf, ParserRule parserRule) throws IOException {
         writeln(bf, "public " + getContextName(parserRule) + " " + parserRule.getRuleName()
                 + "(" +
-                parserRule.syntAtrs.stream().map(s -> s.type + " " + s.value).collect(Collectors.joining()) +
+                parserRule.inhAtrs.stream().map(s -> s.type + " " + s.value).collect(Collectors.joining()) +
                 ")" + " throws ParseException " + "{");
-        for (List<Symbol> rule : parserRule.rules) {
-            if (rule.size() == 0) {
-                // Пока хз
-            }
+        cntTab++;
 
-            writeln(bf, "if (" + getIfConditional(rule.get(0)) + ") {");
+        writeln(bf, getContextName(parserRule) + " " + getContextVar() +
+                " = new " + getContextName(parserRule) + "(\"" + parserRule.getRuleName() + "\");");
+
+        for (List<Symbol> rule : parserRule.rules) {
+
+            Set<String> nextElms = grammar.getNext(rule, parserRule.getRuleName());
+
+            String ifCondition = String.format("Set.of(%s).contains(%s.curToken().token)",
+                    nextElms.stream().map(this::getEnum).collect(Collectors.joining(",")), getLexerVar());
+
+            writeln(bf, "if (" + ifCondition + ") {");
+            cntTab++;
 
             for (Symbol symbol : rule) {
                 writeSymbol(bf, symbol);
             }
 
-            writeln(bf, "return что-то;");
+            writeln(bf, "return " + getContextVar() + ";");
+            cntTab--;
             writeln(bf, "}");
         }
+
+        writeln(bf, String.format("throw new ParseException(\"don't expected token: \" + %s.curToken().text, %s.curPos());", getLexerVar(), getLexerVar()));
+
+        cntTab--;
+
         writeln(bf, "}");
     }
 
+    private String  getEnum(String s) {
+        return TokenEnumGenerator.getEnumName(grammar.grammarName) + "." + s;
+    }
+
     private void writeSymbol(BufferedWriter bf, Symbol symbol) throws IOException {
-        if (symbol instanceof TranslatingSymbol) {
-            TranslatingSymbol tr = (TranslatingSymbol) symbol;
+        if (symbol instanceof TranslatingSymbol tr) {
+            tr.normalize(getContextVar());
             for (String line : tr.code.split("\n")) {
                 writeln(bf, line);
             }
-        } else if (symbol instanceof TerminalSymbol) {
-            writeln(bf, "if");
-        }
-    }
+            bf.newLine();
+        } else if (symbol instanceof TerminalSymbol ts) {
+            writeln(bf, String.format("if (%s.curToken().token != %s) {", getLexerVar(), getEnum(ts.terminalName)));
+            cntTab++;
+            writeln(bf, String.format("throw new ParseException(\"Expected %s, but found: \"" +
+                            " + %s.curToken().text, lex.curPos());", ts.terminalName, getLexerVar()));
+            cntTab--;
+            writeln(bf, "}");
+            writeln(bf, String.format("%s.add(new Tree(%s.curToken().text));", getContextVar(), getLexerVar()));
+            writeln(bf, String.format("MyToken %s = %s.curToken();", ts.var,getLexerVar()));
+            writeln(bf, getLexerVar() + ".nextToken();");
+            bf.newLine();
+        } else if (symbol instanceof  NonTerminalSymbol nt) {
+            writeln(bf, String.format("%s %s = %s(%s);",
+                    getContextName(grammar.parserRules.get(nt.nonTerminalName)), nt.var, nt.nonTerminalName,
+                    nt.translatingSymbol.code));
+            writeln(bf, getContextVar() + ".add(" + nt.var + ");");
+            bf.newLine();
 
-    private String getIfConditional(Symbol symbol) {
-        Set<String> nextElms = FIRST.get(symbol);
-        if (nextElms.remove(AbstractLexer.EPS)) {
-            nextElms.addAll(FOLLOW.get(symbol));
         }
-        return "Set.of(" + String.join(",", nextElms) + ").contains(lex.curToken())";
-    }
-
-    private String getFirst(List<Symbol> rule) {
-        return "";
     }
 
     public void writeRuleContext(BufferedWriter bf, ParserRule parserRule) throws IOException {
         writeln(bf, "public static class " + getContextName(parserRule) + " extends Tree" + "{");
-        for (Attribute inhAtr : parserRule.inhAtrs ) {
-            writeln(bf, inhAtr.type + " " + inhAtr.value + ";");
+        cntTab++;
+
+        writeln(bf, "public " + getContextName(parserRule) + "(String node, Tree... children) {");
+        cntTab++;
+        writeln(bf, "super(node, children);");
+        cntTab--;
+        writeln(bf, "}");
+
+        writeln(bf, "public " + getContextName(parserRule) + "(String node) {");
+        cntTab++;
+        writeln(bf, "super(node);");
+        cntTab--;
+        writeln(bf, "}");
+
+        for (Attribute syntAtr : parserRule.syntAtrs ) {
+            writeln(bf, "public " + syntAtr.type + " " + syntAtr.value + ";");
         }
+        cntTab--;
         writeln(bf, "}");
     }
 
-    private void writeImports(BufferedWriter bf) throws IOException {
-        for (String imp : IMPORTS) {
-            writeln(bf, "import " + imp + ';');
-        }
-        bf.newLine();
-    }
-
     private void writeConstructors(BufferedWriter bf, String grammarName) throws IOException {
-        writeln(bf, "public void " + grammarName + " (InputStream is) throws ParseException {");
-        writeln(bf, "lex = new " + LexerGenerator.getLexerName(grammarName) + "(is);");
-        writeln(bf,  "lex.nextToken();");
+        writeln(bf, "public " +getParserName(grammarName) + "(InputStream is) throws ParseException {");
+        cntTab++;
+        writeln(bf, String.format("%s = new %s(is);", getLexerVar(),  LexerGenerator.getLexerName(grammarName)));
+        writeln(bf,  String.format("%s.nextToken();", getLexerVar()));
+        cntTab--;
         writeln(bf, "}");
         bf.newLine();
     }
 
     private void writeFields(BufferedWriter bf) throws IOException {
-        writeln(bf, "Lexer lex;");
+        writeln(bf, String.format("Lexer %s;", getLexerVar()));
         bf.newLine();
     }
 
@@ -166,5 +170,9 @@ public class ParserGenerator extends Generator {
         String name =  parserRule.getRuleName();
         String upperCaseName = name.substring(0, 1).toUpperCase() + name.substring(1);
         return upperCaseName + "Context";
+    }
+
+    public static String getParserName(String grammarName) {
+        return grammarName + "Parser";
     }
 }

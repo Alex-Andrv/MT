@@ -6,6 +6,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 public abstract class Generator {
 
@@ -28,8 +29,11 @@ public abstract class Generator {
     }
 
     protected void createFile(Path file, String className) throws IOException {
-        System.out.println("Create " + className);
+        if (Files.deleteIfExists(file)) {
+            System.out.println("Delete old version " + className);
+        }
         Files.createFile(file);
+        System.out.println("Create " + className);
     }
 
     protected void writeTabs(BufferedWriter bf) throws IOException {
@@ -42,6 +46,13 @@ public abstract class Generator {
     public void writeln(BufferedWriter bf, String str) throws IOException {
         writeTabs(bf);
         bf.write(str);
+        bf.newLine();
+    }
+
+    void writeImports(BufferedWriter bf, List<String> imports) throws IOException {
+        for (String imp : imports) {
+            writeln(bf, "import " + imp + ';');
+        }
         bf.newLine();
     }
 }

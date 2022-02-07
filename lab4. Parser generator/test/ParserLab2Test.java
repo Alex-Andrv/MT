@@ -1,125 +1,66 @@
-import model.Tree;
+import Lab2.Lab2Parser;
 import org.junit.jupiter.api.Test;
-import parser.Parser;
+import util.Tree;
 
+import java.io.ByteArrayInputStream;
 import java.text.ParseException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
-class ParserTest {
+class ParserLab2Test {
 
-    Parser parser = new Parser();
+    private final static Tree EPS = new Tree("");
 
     Random random = new Random();
 
-    private Map<String, Tree> getTests(boolean withParams, boolean withReturnValue, boolean withFunType) {
+    private List<String> getTests(boolean withParams, boolean withReturnValue, boolean withFunType) {
         //* - zero or one space
         //? - one or many space
 
         List<String> funNames = List.of("simpleFun", "_simpleFun_11_", "_simpleFun_11_gfdgd", "__", "__123___");
 
-        Map<String, Tree> paramsMap = Map.of("*", new Tree("PARAMS", Parser.EPS));
+
+        List<String> params = List.of("*");
         if (withParams) {
-            paramsMap = getMapParameters();
+            params = getMapParameters();
         }
 
-        Map<String, Tree> retValMap = Map.of("", new Tree("RETURN_VAL", Parser.EPS));
+        List<String>  retValues = List.of("");
         if (withReturnValue) {
-            List<String> retValues = List.of(":*Int", ":*_String", ":*_123", ":*__");
-            retValMap = new HashMap<>();
-            for (String retValue : retValues) {
-                retValMap.put(retValue,
-                        new Tree("RETURN_VAL", new Tree(":"), new Tree("RETURN_TYPE")));
-            }
+            retValues = List.of(":*Int", ":*_String", ":*_123", ":*__");
         }
 
 
         final String funTemplate = "*fun?%s*(*%s*)*%s*";
 
-        Map<String, Tree> tests = new HashMap<>();
+        List<String> tests = new ArrayList<>();
         for (String funName : funNames) {
-            for (Map.Entry<String, Tree> param : paramsMap.entrySet()) {
-                for (Map.Entry<String, Tree> retVal : retValMap.entrySet()) {
-                    String test = String.format(funTemplate, funName, param.getKey(), retVal.getKey());
-                    tests.put(test, getExpectedTree(param.getValue(), retVal.getValue()));
+            for (String param : params) {
+                for (String retVal : retValues) {
+                    String test = String.format(funTemplate, funName, param, retVal);
+                    tests.add(test);
                 }
             }
         }
 
-
         return tests;
     }
 
-    private Map<String, Tree> getMapParameters() {
-        return Map.of(
-
-
+    private List<String> getMapParameters() {
+        return List.of(
                 "arg1:*Int",
-                new Tree("PARAMS",
-                        new Tree("PARAM",
-                                new Tree("VAR"), new Tree(":"), new Tree("TYPE")),
-                        new Tree("TAIL", Parser.EPS)),
-
 
                 "final*:*Int*,*_bar_11*:*_my_1string1",
-                new Tree("PARAMS",
-                        new Tree("PARAM",
-                                new Tree("VAR"), new Tree(":"), new Tree("TYPE")),
-                        new Tree("TAIL", new Tree(","), new Tree("PARAM",
-                                new Tree("VAR"), new Tree(":"), new Tree("TYPE")),
-                                new Tree("TAIL", Parser.EPS))),
-
 
                 "final*:*(*Int*)*->*Int*,*_bar_11*:*_my_1string1",
-                new Tree("PARAMS",
-                        new Tree("PARAM",
-                                new Tree("VAR"), new Tree(":"),
-                                new Tree("TYPE",
-                                        new Tree("("),
-                                        new Tree("TYPES", new Tree("TYPE"),
-                                                new Tree("TYPES_TAIL", Parser.EPS)),
-                                        new Tree(")"),
-                                        new Tree("->", new Tree("TYPE")))),
-                        new Tree("TAIL", new Tree(","),
-                                new Tree("PARAM",
-                                        new Tree("VAR"), new Tree(":"), new Tree("TYPE")),
-                                new Tree("TAIL", Parser.EPS))),
 
                 "final*:*()*->*Int*,*_bar_11*:*_my_1string1",
-                new Tree("PARAMS",
-                        new Tree("PARAM",
-                                new Tree("VAR"), new Tree(":"),
-                                new Tree("TYPE",
-                                        new Tree("("),
-                                        new Tree("TYPES", Parser.EPS),
-                                        new Tree(")"),
-                                        new Tree("->", new Tree("TYPE")))),
-                        new Tree("TAIL", new Tree(","),
-                                new Tree("PARAM",
-                                        new Tree("VAR"), new Tree(":"), new Tree("TYPE")),
-                                new Tree("TAIL", Parser.EPS))),
 
-                "final*:*(*Int*, String*)*->*Int*,*_bar_11*:*_my_1string1",
-                new Tree("PARAMS",
-                        new Tree("PARAM",
-                                new Tree("VAR"), new Tree(":"),
-                                new Tree("TYPE",
-                                        new Tree("("),
-                                        new Tree("TYPES", new Tree("TYPE"),
-                                                new Tree("TYPES_TAIL", new Tree(","),
-                                                        new Tree("TYPE"),
-                                                        new Tree("TYPES_TAIL", Parser.EPS))),
-                                        new Tree(")"),
-                                        new Tree("->", new Tree("TYPE")))),
-                        new Tree("TAIL", new Tree(","),
-                                new Tree("PARAM",
-                                        new Tree("VAR"), new Tree(":"), new Tree("TYPE")),
-                                new Tree("TAIL", Parser.EPS))));
+                "final*:*(*Int*, String*)*->*Int*,*_bar_11*:*_my_1string1");
     }
 
     @Test
@@ -146,22 +87,22 @@ class ParserTest {
 
     @Test
     public void functionWithExtraSymbolTest() throws ParseException {
-        Map<String, Tree> tests = getTests(true, true, false);
+        List<String> tests = getTests(true, true, false);
 
-        for (Map.Entry<String, Tree> test : tests.entrySet()) {
-            String breakTestString = breakTest(genTestString(test.getKey()));
+        for (String test : tests) {
+            String breakTestString = breakTest(genTestString(test));
             System.out.println("test: " + breakTestString);
-            assertThrows(ParseException.class, () -> parser.parse(breakTestString));
+            assertThrows(ParseException.class,
+                    () ->  new Lab2Parser(new ByteArrayInputStream(breakTestString.getBytes())).s());
         }
     }
 
-    private void testTests(Map<String, Tree> tests) throws ParseException {
+    private void testTests(List<String> tests) throws ParseException {
 
-        for (Map.Entry<String, Tree> test : tests.entrySet()) {
-            String testString = genTestString(test.getKey());
+        for (String test : tests) {
+            String testString = genTestString(test);
             System.out.println("test: " + testString);
-            Tree expectedTree = test.getValue();
-            assertEquals(getTreeWithoutExp(testString), expectedTree);
+            getTreeWithoutExp(testString);
         }
     }
 
@@ -185,20 +126,20 @@ class ParserTest {
     }
 
     private String breakTest(String testString) {
-        List<Character> breakElems = List.of('>', '!', ')', '(', ':', ',', '$', '*');
+        List<Character> breakElems = List.of('>', '!', ')', '(', ':', '&', '$', '*');
         Character breakElem = breakElems.get(random.nextInt(breakElems.size()));
         int pos = random.nextInt(testString.length());
         return testString.substring(0, pos) + breakElem + testString.substring(pos);
     }
 
-    private Tree getExpectedTree(Tree params, Tree returnType) {
-        return new Tree("S", new Tree("fun"), new Tree("FUN_NAME"),
+    private Tree getExpectedTree(Tree fun_name, Tree params, Tree returnType) {
+        return new Tree("s", new Tree("fun"), fun_name,
                 new Tree("("), params,
                 new Tree(")"), returnType);
     }
 
     private Tree getTreeWithoutExp(String actual) throws ParseException {
-        assertDoesNotThrow(() -> parser.parse(actual));
-        return parser.parse(actual);
+        assertDoesNotThrow(() -> new Lab2Parser(new ByteArrayInputStream(actual.getBytes())).s());
+        return  new Lab2Parser(new ByteArrayInputStream(actual.getBytes())).s();
     }
 }

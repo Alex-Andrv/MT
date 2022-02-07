@@ -1,10 +1,10 @@
-package generated;
+package util;
 
 public class MyToken {
 
     public final Enum token;
 
-    final String text;
+    public final String text;
 
     final int startIndex;
 
